@@ -7,6 +7,8 @@ from ultralytics import YOLO
 import supervision as sv
 import os
 import json
+import time
+
 
 # Soglia dell'area per considerare una faccia come "pronta per interagire"
 AREA_THRESHOLD = 2500
@@ -117,21 +119,40 @@ class FaceRecognition:
             self.pub_annotation.publish(json.dumps(dictionary))
             
             print("-------------------------------------------------")
-            # try:
+            try:
                 # Show the annotated image
-                # cv2.imshow("annotated_image", annotated_image)
-                # key = cv2.waitKey(1) & 0xFF
-                # if key == ord('q'):
-                #     rospy.loginfo("User requested shutdown")
-                #     break
-            # except Exception as e:
-            #     rospy.logerr(f"Error displaying frame: {e}")
+                cv2.imshow("annotated_image", annotated_image)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    rospy.loginfo("User requested shutdown")
+                    break
+            except Exception as e:
+                rospy.logerr(f"Error displaying frame: {e}")
             # self.pub_image.publish(self.bridge.cv2_to_imgmsg(annotated_image, "bgr8"))
             self.rate.sleep()
 
+import time
+
+def try_open_camera(max_attempts=5, delay=2):
+    """Tenta di aprire la telecamera con un numero massimo di tentativi."""
+    for attempt in range(max_attempts):
+        camera = cv2.VideoCapture(0)
+        if camera.isOpened():
+            rospy.loginfo(f"Camera opened successfully on attempt {attempt + 1}")
+            return camera
+        else:
+            rospy.logwarn(f"Attempt {attempt + 1} failed to open camera. Retrying in {delay} seconds...")
+            camera.release()
+            time.sleep(delay)
+    rospy.logerr("Failed to open camera after multiple attempts.")
+    return None
+
 if __name__ == "__main__":
-    camera = cv2.VideoCapture(0)  # Apre la telecamera
-    face_recognition = FaceRecognition()  # Crea un'istanza della classe FaceRecognition
-    face_recognition.process_camera(camera)  # Elabora i frame dalla telecamera
-    camera.release()  # Rilascia la telecamera
-    cv2.destroyAllWindows()  # Chiude tutte le finestre di OpenCV
+    camera = try_open_camera()  # Tenta di aprire la telecamera
+    if camera is not None:
+        face_recognition = FaceRecognition()  # Crea un'istanza della classe FaceRecognition
+        face_recognition.process_camera(camera)  # Elabora i frame dalla telecamera
+        camera.release()  # Rilascia la telecamera
+        cv2.destroyAllWindows()  # Chiude tutte le finestre di OpenCV
+    else:
+        rospy.logerr("Exiting due to camera initialization failure.")

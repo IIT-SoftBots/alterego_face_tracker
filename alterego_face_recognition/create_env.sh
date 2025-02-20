@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Nome dell'ambiente da creare
-ENV_NAME="face_tracking_test"
+ENV_NAME="face_tracking"
 
 # Percorso del file requirements.txt
 REQUIREMENTS_FILE="requirements.txt"
