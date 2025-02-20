@@ -84,6 +84,8 @@ class FaceRecognition:
         """Elabora i frame dalla telecamera e pubblica i risultati."""
         while not rospy.is_shutdown():
             ret, frame = camera.read()
+            # Divide l'immagine a metà orizzontalmente (un occhio del robot)
+            frame = frame[:, 0:int(frame.shape[1]/2)]
             if not ret:
                 rospy.logerr("Can't read frame from camera")
                 break
@@ -115,20 +117,20 @@ class FaceRecognition:
             self.pub_annotation.publish(json.dumps(dictionary))
             
             print("-------------------------------------------------")
-            try:
+            # try:
                 # Show the annotated image
-                cv2.imshow("annotated_image", annotated_image)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    rospy.loginfo("User requested shutdown")
-                    break
-            except Exception as e:
-                rospy.logerr(f"Error displaying frame: {e}")
+                # cv2.imshow("annotated_image", annotated_image)
+                # key = cv2.waitKey(1) & 0xFF
+                # if key == ord('q'):
+                #     rospy.loginfo("User requested shutdown")
+                #     break
+            # except Exception as e:
+            #     rospy.logerr(f"Error displaying frame: {e}")
             # self.pub_image.publish(self.bridge.cv2_to_imgmsg(annotated_image, "bgr8"))
             self.rate.sleep()
 
 if __name__ == "__main__":
-    camera = cv2.VideoCapture(4)  # Apre la telecamera
+    camera = cv2.VideoCapture(0)  # Apre la telecamera
     face_recognition = FaceRecognition()  # Crea un'istanza della classe FaceRecognition
     face_recognition.process_camera(camera)  # Elabora i frame dalla telecamera
     camera.release()  # Rilascia la telecamera
