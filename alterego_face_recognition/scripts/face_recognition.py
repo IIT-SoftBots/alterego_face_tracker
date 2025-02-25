@@ -80,8 +80,8 @@ class FaceRecognition:
         self.rate = rospy.Rate(60)  # Frequenza di pubblicazione a 15 Hz
 
     def process_camera(self, camera):
-        cv2.namedWindow("annotated_image", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("annotated_image", self.IMG_WIDTH, self.IMG_HEIGHT)
+        # cv2.namedWindow("annotated_image", cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow("annotated_image", self.IMG_WIDTH, self.IMG_HEIGHT)
         
         """Elabora i frame dalla telecamera e pubblica i risultati."""
         while not rospy.is_shutdown():
@@ -121,7 +121,7 @@ class FaceRecognition:
             print("-------------------------------------------------")
             try:
                 # Show the annotated image
-                cv2.imshow("annotated_image", annotated_image)
+                # cv2.imshow("annotated_image", annotated_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     rospy.loginfo("User requested shutdown")
