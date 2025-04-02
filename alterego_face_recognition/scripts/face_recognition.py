@@ -7,6 +7,8 @@ from ultralytics import YOLO
 import supervision as sv
 import os
 import json
+import time
+
 
 # Soglia dell'area per considerare una faccia come "pronta per interagire"
 AREA_THRESHOLD = 2500
@@ -62,7 +64,7 @@ class FaceRecognition:
             detected_faces = self.tracker.update_with_detections(detected_faces)
             labels = [f"#{tracker_id}" for tracker_id in detected_faces.tracker_id]
             frame = self.label_annotator.annotate(scene=frame, detections=detected_faces, labels=labels)
-            print("Detected faces IDs: ", detected_faces.tracker_id) 
+            # print("Detected faces IDs: ", detected_faces.tracker_id) 
 
         # Annotazione dell'immagine con i bounding box
         annotated_image = self.box_annotator.annotate(scene=frame, detections=detected_faces)
@@ -78,12 +80,14 @@ class FaceRecognition:
         self.rate = rospy.Rate(60)  # Frequenza di pubblicazione a 15 Hz
 
     def process_camera(self, camera):
-        cv2.namedWindow("annotated_image", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("annotated_image", self.IMG_WIDTH, self.IMG_HEIGHT)
+        # cv2.namedWindow("annotated_image", cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow("annotated_image", self.IMG_WIDTH, self.IMG_HEIGHT)
         
         """Elabora i frame dalla telecamera e pubblica i risultati."""
         while not rospy.is_shutdown():
             ret, frame = camera.read()
+            # Divide l'immagine a metà orizzontalmente (un occhio del robot)
+            frame = frame[:, 0:int(frame.shape[1])]
             if not ret:
                 rospy.logerr("Can't read frame from camera")
                 break
@@ -100,24 +104,24 @@ class FaceRecognition:
                     # Calcola l'area del bounding box
                     area = (detection[2] - detection[0]) * (detection[3] - detection[1])
                     areas.append(area)
-                    print("Face", i+1 , ": Area = ", area)
+                    # print("Face", i+1 , ": Area = ", area)
                     if area > AREA_THRESHOLD:
                         self.pub_ready2interact.publish(True)
-                        print("Face", i+1 , ": \033[92m", "READY" "\033[0m")
+                        # print("Face", i+1 , ": \033[92m", "READY" "\033[0m")
                     else:
                         self.pub_ready2interact.publish(False)
-                        print("Face", i+1 ,": \033[91m", "NOT READY" "\033[0m")
+                        # print("Face", i+1 ,": \033[91m", "NOT READY" "\033[0m")
             else:
                 self.pub_ready2interact.publish(False)
-                print("No face detected")
+                # print("No face detected")
             
             # Pubblica le annotazioni come stringa JSON
             self.pub_annotation.publish(json.dumps(dictionary))
             
-            print("-------------------------------------------------")
+            # print("-------------------------------------------------")
             try:
                 # Show the annotated image
-                cv2.imshow("annotated_image", annotated_image)
+                # cv2.imshow("annotated_image", annotated_image)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     rospy.loginfo("User requested shutdown")
@@ -127,9 +131,28 @@ class FaceRecognition:
             # self.pub_image.publish(self.bridge.cv2_to_imgmsg(annotated_image, "bgr8"))
             self.rate.sleep()
 
+
+
+def try_open_camera(max_attempts=5, delay=2):
+    """Tenta di aprire la telecamera con un numero massimo di tentativi."""
+    for attempt in range(max_attempts):
+        camera = cv2.VideoCapture(4)
+        if camera.isOpened():
+            rospy.loginfo(f"Camera opened successfully on attempt {attempt + 1}")
+            return camera
+        else:
+            rospy.logwarn(f"Attempt {attempt + 1} failed to open camera. Retrying in {delay} seconds...")
+            camera.release()
+            time.sleep(delay)
+    rospy.logerr("Failed to open camera after multiple attempts.")
+    return None
+
 if __name__ == "__main__":
-    camera = cv2.VideoCapture(4)  # Apre la telecamera
-    face_recognition = FaceRecognition()  # Crea un'istanza della classe FaceRecognition
-    face_recognition.process_camera(camera)  # Elabora i frame dalla telecamera
-    camera.release()  # Rilascia la telecamera
-    cv2.destroyAllWindows()  # Chiude tutte le finestre di OpenCV
+    camera = try_open_camera()  # Tenta di aprire la telecamera
+    if camera is not None:
+        face_recognition = FaceRecognition()  # Crea un'istanza della classe FaceRecognition
+        face_recognition.process_camera(camera)  # Elabora i frame dalla telecamera
+        camera.release()  # Rilascia la telecamera
+        cv2.destroyAllWindows()  # Chiude tutte le finestre di OpenCV
+    else:
+        rospy.logerr("Exiting due to camera initialization failure.")
