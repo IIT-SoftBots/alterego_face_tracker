@@ -11,7 +11,7 @@ import os
 
 # Classe PID per il controllo proporzionale-integrale-derivativo
 class PID:
-    def __init__(self, Kp, Ki, Kd, setpoint=0):
+    def __init__(self, Kp, Ki, Kd, setpoint=0,integral_limit=0):
         self.Kp = Kp  # Guadagno proporzionale
         self.Ki = Ki  # Guadagno integrale
         self.Kd = Kd  # Guadagno derivativo
@@ -19,12 +19,20 @@ class PID:
         self.prev_error = 0  # Errore precedente
         self.integral = 0  # Somma degli errori passati
         self.last_time = time.time()  # Tempo dell'ultima misurazione
+        self.integral_limit = integral_limit  # Limit for integral term
+
 
     def compute(self, measurement):
         current_time = time.time()
         dt = current_time - self.last_time  # Intervallo di tempo
         error = self.setpoint - measurement  # Errore attuale
         self.integral += error * dt  # Calcolo della parte integrale
+
+        # Apply integral windup protection
+        if self.integral_limit is not None:
+            self.integral = max(min(self.integral, self.integral_limit), -self.integral_limit)
+
+        # print("integral", self.integral)
         derivative = (error - self.prev_error) / dt if dt > 0 else 0  # Calcolo della parte derivativa
         output = self.Kp * error + self.Ki * self.integral + self.Kd * derivative  # Uscita del PID
         self.prev_error = error  # Aggiorna l'errore precedente
@@ -40,8 +48,8 @@ class FaceTracker:
         self.navigation_status = "SUCCEEDED"
 
         # Variabili di controllo
-        self.pitch_pid = PID(Kp=0.1, Ki=0.2, Kd=0.001)  # PID per il pitch
-        self.yaw_pid = PID(Kp=0.1, Ki=0.5, Kd=0.001)  # PID per lo yaw
+        self.pitch_pid = PID(Kp=0.5, Ki=0.2, Kd=0.001)  # PID per il pitch
+        self.yaw_pid = PID(Kp=0.5, Ki=0.5, Kd=0.001)  # PID per lo yaw
         self.error_yaw_ = 0  # Errore sull'asse x
         self.error_pitch_ = 0  # Errore sull'asse y
 
@@ -52,7 +60,7 @@ class FaceTracker:
         self.pitch_offset_ = 0.0  # Offset del pitch
 
         # Filtro passa-basso
-        self.alpha = 0.1  # Coefficiente di smorzamento (0 < alpha <= 1)
+        self.alpha = 0.02  # Coefficiente di smorzamento (0 < alpha <= 1)
         self.filtered_pitch_ = 0.0  # Pitch filtrato
         self.filtered_yaw_ = 0.0  # Yaw filtrato
 
@@ -67,7 +75,7 @@ class FaceTracker:
         self.no_face_counter = 0
         self.no_face_threshold = 5 * 100  # 5 secondi a 100 Hz
         self.target_yaw = 0
-        self.target_pitch = 0
+        self.target_pitch = 0 
 
         # Configurazione di ROS
         rospy.init_node('face_tracker', anonymous=False)
@@ -75,7 +83,7 @@ class FaceTracker:
         rospy.Subscriber(f'/{self.robot_name}/detections', String, self.tracker_callback)
         rospy.Subscriber(f'/{self.robot_name}/left/meas_neck_shaft', Float64, self.left_meas_neck_shaft_callback)
         rospy.Subscriber(f'/{self.robot_name}/right/meas_neck_shaft', Float64, self.right_meas_neck_shaft_callback)
-        rospy.Subscriber(f'/{self.robot_name}/auto_mode_status', Bool, self.auto_mode_status_callback)
+        rospy.Subscriber(f'/{self.robot_name}/face_tracking/auto_mode_status', Bool, self.auto_mode_status_callback)
         self.head_pose_pub = rospy.Publisher(f'/{self.robot_name}/head/head_pos', Pose, queue_size=10)
 
         # Inizializza il client del servizio enable_auto_mode_service
@@ -87,6 +95,11 @@ class FaceTracker:
         self.target_yaw_home = 0
         self.homing_status = 1
         self.auto_mode_status  = True
+        # Add these lines to your __init__ method
+        self.face_switch_timeout = 10.0  # Seconds to wait before allowing a face switch
+        self.last_face_switch_time = time.time()  # Time when we last switched faces
+        self.current_tracking_id = None  # ID of the currently tracked face
+        
 
     # Funzione per applicare il filtro passa-basso
     def low_pass_filter(self, current_value, previous_filtered_value):
@@ -115,36 +128,62 @@ class FaceTracker:
 
     # Callback per il rilevamento della faccia
     def tracker_callback(self, msg):
-        msg = json.loads(msg.data)
-        if len(msg) == 0:
+        msg_data = json.loads(msg.data)
+        if len(msg_data) == 0:
             # self.no_face_counter += 1
             return
         else:
             self.last_detection_time = time.time()  # Reset del timer al rilevamento della faccia
 
-        # Ordinamento dei primi due bounding box per area 
-        msg = sorted(msg.items(), key=lambda item: (item[1][2]-item[1][0])*(item[1][3]-item[1][1]), reverse=True)[:2]
-
-        # Se la differenza in area tra le due facce e' superiore al 5%, scegliamo quella piu vicina al robot
-        if len(msg) > 1 and abs((msg[0][1][2]-msg[0][1][0])*(msg[0][1][3]-msg[0][1][1]) - (msg[1][1][2]-msg[1][1][0])*(msg[1][1][3]-msg[1][1][1])) > 0.05:
-            #sort by area
-            detections = sorted(msg, key=lambda item: (item[1][2]-item[1][0])*(item[1][3]-item[1][1]), reverse=True)
+        # Ordinamento dei bounding box per area 
+        msg_items = sorted(msg_data.items(), key=lambda item: (item[1][2]-item[1][0])*(item[1][3]-item[1][1]), reverse=True)[:2]
+        
+        current_time = time.time()
+        
+        # Check if currently tracked face is still visible
+        if self.current_tracking_id is not None and self.current_tracking_id in [d[0] for d in msg_items]:
+            # Continue tracking the same face
+            for detection in msg_items:
+                if detection[0] == self.current_tracking_id:
+                    target = detection
+                    break
         else:
-            #altrimenti, se le facce sono ad uguale distanza (area), scegliamo quella piu vicina al centro immagine
-            detections = sorted(msg, key=lambda item: abs(self.IMG_WIDTH/2 - (item[1][0] + item[1][2])/2) + abs(self.IMG_HEIGHT/2 - (item[1][1] + item[1][3])/2), reverse=False)
-
-        # i take the closest detection to the center of the image
-        target = detections[0]
-
+            # Need to pick a new face - check if timeout has elapsed
+            if self.current_tracking_id is None or (current_time - self.last_face_switch_time) > self.face_switch_timeout:
+                # Time to switch faces or first detection
+                
+                # Se la differenza in area tra le due facce e' superiore al 5%, scegliamo quella piu vicina al robot
+                if len(msg_items) > 1 and abs((msg_items[0][1][2]-msg_items[0][1][0])*(msg_items[0][1][3]-msg_items[0][1][1]) - (msg_items[1][1][2]-msg_items[1][1][0])*(msg_items[1][1][3]-msg_items[1][1][1])) > 0.05:
+                    # Sort by area
+                    detections = sorted(msg_items, key=lambda item: (item[1][2]-item[1][0])*(item[1][3]-item[1][1]), reverse=True)
+                else:
+                    # Altrimenti, se le facce sono ad uguale distanza (area), scegliamo quella piu vicina al centro immagine
+                    detections = sorted(msg_items, key=lambda item: abs(self.IMG_WIDTH/2 - (item[1][0] + item[1][2])/2) + abs(self.IMG_HEIGHT/2 - (item[1][1] + item[1][3])/2), reverse=False)
+                
+                # Take the selected detection based on our criteria
+                target = detections[0]
+                
+                # Only update tracking ID if it's different (true switch)
+                if self.current_tracking_id != target[0]:
+                    self.current_tracking_id = target[0]  # Store ID of current face we're tracking
+                    self.last_face_switch_time = current_time  # Record switch time
+            else:
+                # Timeout hasn't elapsed, keep using previous face's ID but with updated position
+                # Find a face close to where we were tracking (use center point comparison)
+                if self.current_tracking_id is not None:
+                    # We'll pick the closest face to where our previous face was
+                    # For simplicity, just use the first one for now
+                    target = msg_items[0]
+                
         # CHECKME: i take the first item in the target detection, that is the X,Y coordinates
         error_x, error_y = self.compute_error(target[1])
 
         # Imposta un margine di tolleranza per considerare l'errore come zero quando è piccolo
-        if abs(error_x) < 0.1:
+        if abs(error_x) < 0.05:  # Reduced from 0.1 for more precision
             error_x = 0
-        if abs(error_y) < 0.1:
+        if abs(error_y) < 0.05:  # Reduced from 0.1 for more precision
             error_y = 0
-        
+                    
         self.error_yaw_ = error_x
         self.error_pitch_ = error_y
         # Se un volto viene rilevato, mantieni il target pitch a 10 gradi fino a quando non viene rilevato un nuovo errore significativo
@@ -186,8 +225,10 @@ class FaceTracker:
                 # print("target_yaw" , self.target_yaw)
                 # print("error_pitch" , self.filtered_error_pitch_)
                 # print("error_yaw" , self.filtered_error_yaw_)
-                # # Controllo se sono passa  ti più di 5 secondi dall'ultimo rilevamento della faccia
+                # # Controllo se sono passati più di 5 secondi dall'ultimo rilevamento della faccia
                 if (time.time() - self.last_detection_time > 5):
+
+                    # print("NO FACE DETECTED----------------")
                     if(self.homing_status == 1):
                         self.error_pitch_ = 0
                         self.error_yaw_ = 0

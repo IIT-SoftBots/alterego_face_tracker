@@ -20,7 +20,7 @@ class FaceRecognition:
     # device: dispositivo su cui eseguire il modello YOLO (cpu, cuda)
     # conf_threshold: soglia di confidenza per il riconoscimento facciale
     # min_area_threshold: soglia minima dell'area del bounding box
-    def __init__(self, model_size="n", tracking=True, verbose=False, device="cpu", conf_threshold=0.6, min_area_threshold=0.003): #was 0.005
+    def __init__(self, model_size="n", tracking=True, verbose=False, device="cpu", conf_threshold=0.5, min_area_threshold=0.003): #was 0.005
         # Dimensioni dell'immagine
         self.IMG_WIDTH = 672
         self.IMG_HEIGHT = 376
@@ -64,7 +64,7 @@ class FaceRecognition:
             detected_faces = self.tracker.update_with_detections(detected_faces)
             labels = [f"#{tracker_id}" for tracker_id in detected_faces.tracker_id]
             frame = self.label_annotator.annotate(scene=frame, detections=detected_faces, labels=labels)
-            print("Detected faces IDs: ", detected_faces.tracker_id) 
+            #print("Detected faces IDs: ", detected_faces.tracker_id) 
 
         # Annotazione dell'immagine con i bounding box
         annotated_image = self.box_annotator.annotate(scene=frame, detections=detected_faces)
@@ -104,21 +104,24 @@ class FaceRecognition:
                     # Calcola l'area del bounding box
                     area = (detection[2] - detection[0]) * (detection[3] - detection[1])
                     areas.append(area)
-                    print("Face", i+1 , ": Area = ", area)
+                    #print("Face", i+1 , ": Area = ", area)
                     if area > AREA_THRESHOLD:
                         self.pub_ready2interact.publish(True)
-                        print("Face", i+1 , ": \033[92m", "READY" "\033[0m")
+                        # print("Face", i+1 , ": \033[92m", "READY" "\033[0m")
                     else:
                         self.pub_ready2interact.publish(False)
-                        print("Face", i+1 ,": \033[91m", "NOT READY" "\033[0m")
+                        # print("Face", i+1 ,": \033[91m", "NOT READY" "\033[0m")
+                    
+                    # Pubblica le annotazioni come stringa JSON
+                
+                self.pub_annotation.publish(json.dumps(dictionary))
             else:
                 self.pub_ready2interact.publish(False)
-                print("No face detected")
+                # print("No face detected")
             
-            # Pubblica le annotazioni come stringa JSON
-            self.pub_annotation.publish(json.dumps(dictionary))
+
             
-            print("-------------------------------------------------")
+            #print("-------------------------------------------------")
             try:
                 # Show the annotated image
                 # cv2.imshow("annotated_image", annotated_image)
