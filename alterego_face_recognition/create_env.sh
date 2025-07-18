@@ -12,6 +12,9 @@ if [ ! -f "$REQUIREMENTS_FILE" ]; then
   exit 1
 fi
 
+# Source Conda
+source "$(conda info --base)/etc/profile.d/conda.sh"
+
 # Crea l'ambiente Conda
 echo "Creazione dell'ambiente Conda: $ENV_NAME"
 conda create --name "$ENV_NAME" --yes python=3.10
