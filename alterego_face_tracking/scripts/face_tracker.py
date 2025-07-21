@@ -174,7 +174,7 @@ class FaceTracker:
                 self.target_yaw = self.yaw_pid.compute(self.filtered_yaw_)
 
                 # Saturazione del pitch tra 25 e -25 gradi
-                self.target_pitch = max(min(self.target_pitch, 25), -25)
+                self.target_pitch = max(min(self.target_pitch, 50), -50)
 
                 # Saturazione dello yaw tra 50 e -50 gradi
                 self.target_yaw = max(min(self.target_yaw, 50), -50)
