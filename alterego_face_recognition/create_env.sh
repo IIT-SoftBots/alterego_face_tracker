@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Nome dell'ambiente da creare
-ENV_NAME="face_tracking"
+ENV_NAME="face_tracking_test"
 
 # Percorso del file requirements.txt
 REQUIREMENTS_FILE="requirements.txt"
@@ -11,6 +11,9 @@ if [ ! -f "$REQUIREMENTS_FILE" ]; then
   echo "Errore: $REQUIREMENTS_FILE non trovato."
   exit 1
 fi
+
+# Source Conda
+source "$(conda info --base)/etc/profile.d/conda.sh"
 
 # Crea l'ambiente Conda
 echo "Creazione dell'ambiente Conda: $ENV_NAME"
