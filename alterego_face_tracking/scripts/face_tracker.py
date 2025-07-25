@@ -75,7 +75,7 @@ class FaceTracker:
         rospy.Subscriber(f'/{self.robot_name}/detections', String, self.tracker_callback)
         rospy.Subscriber(f'/{self.robot_name}/left/meas_neck_shaft', Float64, self.left_meas_neck_shaft_callback)
         rospy.Subscriber(f'/{self.robot_name}/right/meas_neck_shaft', Float64, self.right_meas_neck_shaft_callback)
-        rospy.Subscriber(f'/{self.robot_name}/auto_mode_status', Bool, self.auto_mode_status_callback)
+        rospy.Subscriber(f'/{self.robot_name}/enable_head_auto_mode', Bool, self.auto_mode_status_callback)
         self.head_pose_pub = rospy.Publisher(f'/{self.robot_name}/head/head_pos', Pose, queue_size=10)
 
         # Inizializza il client del servizio enable_auto_mode_service
@@ -86,7 +86,7 @@ class FaceTracker:
         self.target_pitch_home = 10
         self.target_yaw_home = 0
         self.homing_status = 1
-        self.auto_mode_status  = True
+        self.auto_mode_status  = False
 
     # Funzione per applicare il filtro passa-basso
     def low_pass_filter(self, current_value, previous_filtered_value):
@@ -173,11 +173,11 @@ class FaceTracker:
                 self.target_pitch = self.pitch_pid.compute(self.filtered_pitch_)
                 self.target_yaw = self.yaw_pid.compute(self.filtered_yaw_)
 
-                # Saturazione del pitch tra 30 e -30 gradi
+                # Saturazione del pitch tra 25 e -25 gradi
                 self.target_pitch = max(min(self.target_pitch, 25), -25)
 
-                # Saturazione dello yaw tra 30 e -30 gradi
-                self.target_yaw = max(min(self.target_yaw, 30), -30)
+                # Saturazione dello yaw tra 50 e -50 gradi
+                self.target_yaw = max(min(self.target_yaw, 50), -50)
                 
                 # print("---------------------")
                 # print("pitch" , self.filtered_pitch_)
