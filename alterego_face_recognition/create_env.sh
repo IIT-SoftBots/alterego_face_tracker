@@ -3,6 +3,11 @@
 # Nome dell'ambiente da creare
 ENV_NAME="face_tracking_test"
 
+#!/bin/bash
+
+# Nome dell'ambiente da creare
+ENV_NAME="face_tracking_test"
+
 # Percorso del file requirements.txt
 REQUIREMENTS_FILE="requirements.txt"
 
@@ -26,5 +31,13 @@ conda activate "$ENV_NAME"
 # Installa i pacchetti da requirements.txt
 echo "Installazione dei pacchetti da $REQUIREMENTS_FILE"
 pip install -r "$REQUIREMENTS_FILE"
+
+# Installa empy, necessario per buildare pacchetti ROS in Conda env
+echo "Installazione di empy (necessario per build ROS)"
+pip install empy
+
+# Installa omegaconf, necessario per Ultralytics
+echo "Installazione di omegaconf (necessario per Ultralytics)"
+pip install omegaconf
 
 echo "Ambiente $ENV_NAME creato e configurato con successo."
