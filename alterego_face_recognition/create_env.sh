@@ -27,4 +27,12 @@ conda activate "$ENV_NAME"
 echo "Installazione dei pacchetti da $REQUIREMENTS_FILE"
 pip install -r "$REQUIREMENTS_FILE"
 
+# Installa empy, necessario per buildare pacchetti ROS in Conda env
+echo "Installazione di empy (necessario per build ROS)"
+pip install empy
+
+# Installa omegaconf, necessario per Ultralytics
+echo "Installazione di omegaconf (necessario per Ultralytics)"
+pip install omegaconf
+
 echo "Ambiente $ENV_NAME creato e configurato con successo."
